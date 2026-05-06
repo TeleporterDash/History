@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Loading Level...</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a1a;
+            font-family: Arial, sans-serif;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 1000px;
+            height: 400px;
+            overflow: hidden;
+            perspective: 1000px;
+            background-color: #000000;
+        }
+
+        #cameraContainer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.1s ease-out;
+        }
+
+        #player {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: #1ce92d;
+            bottom: 50px;
+            left: 100px;
+            z-index: 1000;
+        }
+
+        .platform { position: absolute; background: #4287f5; bottom: 50px; }
+        .spike {
+            position: absolute;
+            bottom: 50px;
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-bottom: 30px solid #ff0000;
+        }
+        .teleporter {
+            position: absolute;
+            width: 30px;
+            height: 60px;
+            background: linear-gradient(to right, #ff00ff, #8c00ff);
+            bottom: 50px;
+            border-radius: 15px;
+            animation: glow 1s infinite alternate;
+        }
+
+        #ground { position: absolute; bottom: 0; width: 100%; height: 50px; background: #333; }
+        #score { position: absolute; top: 20px; right: 20px; color: white; font-size: 24px; }
+        
+        #gameOver, #levelComplete {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 48px;
+            display: none;
+            text-align: center;
+            z-index: 100;
+        }
+
+        #progressContainer {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 200px;
+            color: white;
+        }
+
+        #progressBar {
+            width: 100%;
+            height: 10px;
+            background-color: rgba(51, 51, 51, 0.5);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #progressFill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff00, #4287f5);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        @keyframes glow {
+            from { box-shadow: 0 0 5px #ff00ff; }
+            to { box-shadow: 0 0 20px #ff00ff; }
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #00ff00;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        #pauseMenu {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            z-index: 2000;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="cameraContainer">
+            <div id="ground"></div>
+            <div id="player"></div>
+        </div>
+        <div id="score">0</div>
+        <div id="progressContainer">
+            <div id="progressBar">
+                <div id="progressFill"></div>
+            </div>
+        </div>
+        <div id="gameOver">
+            Game Over!<br>
+            <button id="restartBtn">Restart</button>
+        </div>
+        <div id="levelComplete">Level Complete!</div>
+        <div id="pauseMenu">
+            <h2>Game Paused</h2>
+            <button id="resumeBtn">Resume</button>
+            <button id="restartBtn">Restart</button>
+        </div>
+    </div>
+
+    <script>
+        // Constants
+        const CONSTANTS = {
+            COLUMN_WIDTH: 40,
+            GROUND_HEIGHT: 50,
+            JUMP_FORCE: -15,
+            GRAVITY: 0.8,
+            MAX_FALL_SPEED: 15,
+            MOVEMENT_SPEED: 5
+        };
+
+        // Game state
+        let state = {
+            player: {
+                x: 100,
+                y: 50,
+                velocityY: 0,
+                canJump: true,
+                doubleJump: false
+            },
+            game: {
+                score: 0,
+                isRunning: true,
+                isPaused: false,
+                isMuted: false
+            },
+            level: {
+                matrix: [0],
+                title: '',
+                music: '',
+                obstacles: []
+            }
+        };
+
+        // Audio handling
+        const audio = {
+            jump: new Audio('assets/jump.mp3'),
+            death: new Audio('assets/death.mp3'),
+            teleport: new Audio('assets/teleport.mp3'),
+            background: new Audio('assets/background.mp3')
+        };
+
+        function initializeLevel() {
+            return new Promise(async (resolve) => {
+                try {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const levelFile = urlParams.get('level');
+                    
+                    if (levelFile) {
+                        const response = await fetch(levelFile);
+                        const data = await response.json();
+                        processLevelData(data);
+                    } else {
+                        loadTestLevel();
+                    }
+                    
+                    setupControls();
+                    setupAudio();
+                    resolve();
+                } catch (error) {
+                    console.error('Failed to initialize level:', error);
+                    resolve();
+                }
+            });
+        }
+
+        function processLevelData(data) {
+            state.level.matrix = data.matrix;
+            state.level.title = data.title;
+            state.level.music = data.music;
+            createObstacles();
+        }
+
+        function createObstacles() {
+            state.level.matrix.forEach((type, index) => {
+                if (type === 0) return;
+                
+                const obstacle = document.createElement('div');
+                obstacle.style.left = (index * CONSTANTS.COLUMN_WIDTH) + 'px';
+                
+                switch(type) {
+                    case 1:
+                        obstacle.className = 'platform';
+                        break;
+                    case 2:
+                        obstacle.className = 'spike';
+                        break;
+                    case 3:
+                        obstacle.className = 'teleporter';
+                        break;
+                }
+                
+                document.getElementById('cameraContainer').appendChild(obstacle);
+                state.level.obstacles.push(obstacle);
+            });
+        }
+
+        function updateGame() {
+            if (!state.game.isRunning || state.game.isPaused) return;
+
+            // Update player physics
+            state.player.velocityY = Math.min(
+                state.player.velocityY + CONSTANTS.GRAVITY,
+                CONSTANTS.MAX_FALL_SPEED
+            );
+            state.player.y += state.player.velocityY;
+
+            // Check collisions
+            state.level.obstacles.forEach(obstacle => {
+                if (checkCollision(obstacle)) {
+                    handleCollision(obstacle);
+                }
+            });
+
+            // Update player position
+            const playerElement = document.getElementById('player');
+            playerElement.style.transform = `translate(${state.player.x}px, ${-state.player.y}px)`;
+
+            // Update camera
+            updateCamera();
+            
+            // Update progress
+            updateProgress();
+
+            requestAnimationFrame(updateGame);
+        }
+
+        function checkCollision(obstacle) {
+            const player = document.getElementById('player').getBoundingClientRect();
+            const obstacleRect = obstacle.getBoundingClientRect();
+            
+            return !(player.right < obstacleRect.left || 
+                    player.left > obstacleRect.right || 
+                    player.bottom < obstacleRect.top || 
+                    player.top > obstacleRect.bottom);
+        }
+
+        function handleCollision(obstacle) {
+            if (obstacle.className === 'spike') {
+                gameOver();
+            } else if (obstacle.className === 'platform') {
+                if (state.player.velocityY > 0) {
+                    state.player.y = obstacle.offsetTop - CONSTANTS.GROUND_HEIGHT;
+                    state.player.velocityY = 0;
+                    state.player.canJump = true;
+                    state.player.doubleJump = false;
+                }
+            } else if (obstacle.className === 'teleporter') {
+                levelComplete();
+            }
+        }
+
+        function jump() {
+            if (!state.game.isRunning || state.game.isPaused) return;
+            
+            if (state.player.canJump) {
+                state.player.velocityY = CONSTANTS.JUMP_FORCE;
+                state.player.canJump = false;
+                audio.jump.play();
+            } else if (!state.player.doubleJump) {
+                state.player.velocityY = CONSTANTS.JUMP_FORCE * 0.8;
+                state.player.doubleJump = true;
+                audio.jump.play();
+            }
+        }
+
+        function updateCamera() {
+            const container = document.getElementById('cameraContainer');
+            const cameraX = -state.player.x + 100;
+            container.style.transform = `translateX(${cameraX}px)`;
+        }
+
+        function updateProgress() {
+            const progress = (state.player.x / (state.level.matrix.length * CONSTANTS.COLUMN_WIDTH)) * 100;
+            document.getElementById('progressFill').style.width = `${Math.min(progress, 100)}%`;
+        }
+
+        function gameOver() {
+            state.game.isRunning = false;
+            audio.death.play();
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        function levelComplete() {
+            state.game.isRunning = false;
+            document.getElementById('levelComplete').style.display = 'block';
+            setTimeout(() => window.location.href = 'menu.html', 2000);
+        }
+
+        function setupControls() {
+            document.addEventListener('keydown', e => {
+                if (e.code === 'Space') jump();
+                if (e.code === 'Escape') togglePause();
+            });
+            document.addEventListener('mousedown', jump);
+            document.addEventListener('touchstart', jump);
+        }
+
+        function setupAudio() {
+            audio.background.loop = true;
+            audio.background.volume = 0.5;
+            audio.background.play();
+        }
+
+        function togglePause() {
+            state.game.isPaused = !state.game.isPaused;
+            document.getElementById('pauseMenu').style.display = state.game.isPaused ? 'block' : 'none';
+            if (state.game.isPaused) {
+                audio.background.pause();
+            } else {
+                audio.background.play();
+            }
+        }
+
+        // Initialize game
+        window.addEventListener('load', () => {
+            initializeLevel().then(() => {
+                updateGame();
+            });
+        });
+    </script>
+</body>
+</html>
