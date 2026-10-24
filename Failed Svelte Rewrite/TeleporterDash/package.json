@@ -1,0 +1,38 @@
+{
+  "name": "teleporterdash",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json"
+  },
+  "devDependencies": {
+    "@sveltejs/kit": "^2.37.0",
+    "@sveltejs/vite-plugin-svelte": "^6.1.1",
+    "@tsconfig/svelte": "^5.0.5",
+    "eslint": "^9.34.0",
+    "prettier": "^3.6.2",
+    "svelte": "^5.38.6",
+    "svelte-check": "^4.3.1",
+    "svelte-preprocess": "^6.0.3",
+    "tslib": "^2.8.1",
+    "typescript": "~5.8.3",
+    "vite": "^7.1.2",
+    "vite-plugin-pwa": "^1.0.3"
+  },
+  "dependencies": {
+    "gsap": "^3.13.0",
+    "howler": "^2.2.4",
+    "idb": "^8.0.3",
+    "idb-keyval": "^6.2.2",
+    "lucide-svelte": "^0.542.0",
+    "pixi.js": "^8.13.1",
+    "rete": "^2.0.6",
+    "svelte-dnd-action": "^0.9.64",
+    "tone": "^15.1.22",
+    "uuid": "^11.1.0"
+  }
+}

@@ -1,0 +1,27 @@
+:global(.space-y-4 > *:not(:last-child)) {
+  margin-bottom: var(--spacing-6, 1.5rem);
+}
+
+:global(.space-y-2 > *:not(:last-child)) {
+  margin-bottom: var(--spacing-4, 1rem);
+}
+
+:global(.flex) {
+  display: flex;
+}
+
+:global(.gap-2) {
+  gap: var(--spacing-2, 0.5rem);
+}
+
+:global(.gap-4) {
+  gap: var(--spacing-4, 1rem);
+}
+
+:global(.w-full) {
+  width: 100%;
+}
+
+:global(.justify-start) {
+  justify-content: flex-start;
+}
